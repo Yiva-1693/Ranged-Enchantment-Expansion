@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Specification-Title: homingarrows
+Specification-Vendor: Yiva
+Specification-Version: 1
+Implementation-Title: homingarrows
+Implementation-Version: 1.1.0
+Implementation-Vendor: Yiva
+Implementation-Timestamp: 2026-10-09T14:05:10+0800
+
