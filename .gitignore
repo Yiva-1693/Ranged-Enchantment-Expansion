@@ -1,0 +1,45 @@
+# ---- Gradle ----
+# 注意：gradle/wrapper/* 需要保留（与 .gradle/ 不是同一目录）
+.gradle/
+build/
+out/
+
+# ---- 开发环境运行目录（由 runClient / runServer / runData 生成）----
+run/
+run-data/
+logs/
+crash-reports/
+config/
+defaultconfigs/
+mods/
+resourcepacks/
+saves/
+usercache.json
+usernamecache.json
+eula.txt
+banned-ips.json
+banned-players.json
+ops.json
+server.properties
+whitelist.json
+.mixin.out/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+.vscode/
+bin/
+nbproject/
+
+# ---- 模组开发常用忽略项 ----
+# 让构建产物 / 本地测试资源不进入版本库
+src/generated/resources/.cache/
+# 保留 MDK 源包以外的本地临时文件
+*.hprof
+hs_err_pid*.log
+replay_pid*.log
