@@ -41,6 +41,22 @@ public final class HomingArrowManager {
     /** 所有被追踪箭的数据，键为箭矢 UUID。 */
     private static final Map<UUID, ArrowTrackingData> TRACKING_ARROWS = new HashMap<>();
 
+    /**
+     * 连续多少次更新位置不变即判定箭矢已落地/卡住，从而提前结束锁头。
+     * <p>
+     * 取 2 是为了容忍「刚撞上方块、引擎尚未完全夹住」的边界情况：
+     * 真正卡住后位移恒为 0，会立刻累加到 2，仅比落地晚约 2 刻（0.1 秒）。
+     */
+    private static final int STATIONARY_UPDATES_TO_STOP = 2;
+
+    /**
+     * 位置停滞的判定阈值（格²）。
+     * <p>
+     * 飞行中的箭矢每刻位移通常为 0.5~3 格，远大于此值；只有被方块或地面
+     * 卡住时引擎才会把它拉回原位，使位移恒为 0。
+     */
+    private static final double STATIONARY_DELTA_SQR = 1.0E-4D;
+
     private HomingArrowManager() {
     }
 
@@ -56,10 +72,21 @@ public final class HomingArrowManager {
         final Set<UUID> hitTargets = new HashSet<>();
         /** 下一次允许执行目标搜索的刻数。 */
         int nextSearchTick;
+        /**
+         * 连续「位置未发生变化」的更新次数，用于判断箭矢已落地/卡在方块中。
+         * <p>
+         * 刻意不使用 {@code deltaMovement} 判断：制导逻辑每刻都会覆写速度，
+         * 该变量无法反映箭矢是否真的被卡住。位置则由引擎在 {@code move()} 中
+         * 独立推进，不受我们写入速度的影响，因此是唯一可靠的停滞信号。
+         */
+        int stationaryUpdates;
+        /** 上一次更新时记录的箭矢位置（首次记录后不为 null）。 */
+        Vec3 lastPos;
 
         ArrowTrackingData(AbstractArrow arrow, double observedSpeed) {
             this.arrow = arrow;
             this.maxSpeed = Math.max(0.0D, observedSpeed);
+            this.lastPos = arrow.position();
         }
     }
 
@@ -132,6 +159,29 @@ public final class HomingArrowManager {
                 debugTick(arrow, "超过最大追踪时间，解除追踪");
                 iterator.remove();
                 continue;
+            }
+
+            // 落地/卡住检测：必须放在速度检查之前。
+            // 制导每刻都会覆写速度，因此 deltaMovement 无法反映箭矢是否真的停住；
+            // 这里比较「本次与上次更新时的实际位置」——位置由引擎在 move() 中推进，
+            // 我们改速度不会影响它。这样三叉戟落地后会立即让位给忠诚附魔，
+            // 普通箭矢插进方块后也不再回头瞄准目标。
+            Vec3 currentPos = arrow.position();
+            Vec3 lastPos = data.lastPos;
+            data.lastPos = currentPos;
+
+            // 首次记录时没有可比对的基准，直接跳过判定
+            double moveSqr = lastPos == null ? Double.MAX_VALUE : currentPos.distanceToSqr(lastPos);
+
+            if (moveSqr < STATIONARY_DELTA_SQR) {
+                if (++data.stationaryUpdates >= STATIONARY_UPDATES_TO_STOP) {
+                    debugTick(arrow, "已停止移动（位置停滞 {} 次更新），提前解除锁头", data.stationaryUpdates);
+                    iterator.remove();
+                    continue;
+                }
+            } else {
+                // 只要位置还在变化，就重新开始计数
+                data.stationaryUpdates = 0;
             }
 
             // 箭矢几乎停滞时没有继续制导的意义
