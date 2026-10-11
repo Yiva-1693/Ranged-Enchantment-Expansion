@@ -2,6 +2,7 @@ package com.yiva.homingarrows.event;
 
 import com.yiva.homingarrows.HomingArrowsMod;
 import com.yiva.homingarrows.config.ModConfig;
+import com.yiva.homingarrows.whitelist.HomingWhitelist;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -263,6 +264,12 @@ public final class HomingArrowManager {
         }
         // 创造模式玩家免疫
         if (target instanceof Player player && player.isCreative()) {
+            return false;
+        }
+        // 全局白名单：个体（UUID）与种族（EntityType）各一次 O(1) 查表。
+        // 放在这里还顺带覆盖了「已被锁定的目标中途被加入白名单」——
+        // 本方法返回 false 后 currentTarget 会被置空并重新搜索。
+        if (HomingWhitelist.isWhitelisted(target)) {
             return false;
         }
         // 超出追踪范围
