@@ -14,13 +14,12 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 追踪箭管理器：服务端每刻更新所有被标记为追踪箭的箭矢。
@@ -40,10 +39,10 @@ public final class HomingArrowManager {
     public static final String TAG_LOCK_ON_ARROW = "isLockOnArrow";
 
     /** 所有被追踪箭的数据，键为箭矢 UUID。 */
-    private static final Map<UUID, ArrowTrackingData> TRACKING_ARROWS = new HashMap<>();
+    private static final Map<UUID, ArrowTrackingData> TRACKING_ARROWS = new ConcurrentHashMap<>();
 
     /**
-     * 连续多少次更新位置不变即判定箭矢已落地/卡住，从而提前结束锁头。
+     * 连续多少次更新位置不变即判定箭矢已落地/卡住，从而提前结束追踪。
      * <p>
      * 取 2 是为了容忍「刚撞上方块、引擎尚未完全夹住」的边界情况：
      * 真正卡住后位移恒为 0，会立刻累加到 2，仅比落地晚约 2 刻（0.1 秒）。
@@ -106,7 +105,7 @@ public final class HomingArrowManager {
         // 此刻箭矢的速度已由弓的射击逻辑设置完毕，可作为速度上限的基准。
         TRACKING_ARROWS.put(arrow.getUUID(), new ArrowTrackingData(arrow, arrow.getDeltaMovement().length()));
         if (ModConfig.debugMode()) {
-            HomingArrowsMod.LOGGER.info("[锁头箭] 开始追踪箭矢 {}，基准速度 {}",
+            HomingArrowsMod.LOGGER.info("[追踪箭] 开始追踪箭矢 {}，基准速度 {}",
                     arrow.getUUID(), String.format("%.3f", arrow.getDeltaMovement().length()));
         }
     }
@@ -138,13 +137,23 @@ public final class HomingArrowManager {
             return;
         }
 
-        Iterator<Map.Entry<UUID, ArrowTrackingData>> iterator = TRACKING_ARROWS.entrySet().iterator();
-        while (iterator.hasNext()) {
-            ArrowTrackingData data = iterator.next().getValue();
+        // 用 key 快照遍历、循环外统一移除。
+        // 本方法在遍历中会去读实体世界（搜索目标、发粒子），而弹体加入/离开世界会经由
+        // ModEvents 的事件回调往这张表里增删；直接迭代活 Map 会抛
+        // ConcurrentModificationException，并让整个服务端 tick 崩溃（实机已崩过一次）。
+        // 表本身也换成 ConcurrentHashMap，容忍同 tick 内的增删。
+        List<UUID> keys = new ArrayList<>(TRACKING_ARROWS.keySet());
+        List<UUID> toRemove = new ArrayList<>();
+
+        for (UUID key : keys) {
+            ArrowTrackingData data = TRACKING_ARROWS.get(key);
+            if (data == null) {
+                continue;
+            }
             AbstractArrow arrow = data.arrow;
 
             if (!isArrowValid(arrow)) {
-                iterator.remove();
+                toRemove.add(key);
                 continue;
             }
 
@@ -158,7 +167,7 @@ public final class HomingArrowManager {
             // 超时后停止追踪，恢复普通箭矢行为
             if (data.ticksAlive >= ModConfig.maxTrackingTicks()) {
                 debugTick(arrow, "超过最大追踪时间，解除追踪");
-                iterator.remove();
+                toRemove.add(key);
                 continue;
             }
 
@@ -176,8 +185,8 @@ public final class HomingArrowManager {
 
             if (moveSqr < STATIONARY_DELTA_SQR) {
                 if (++data.stationaryUpdates >= STATIONARY_UPDATES_TO_STOP) {
-                    debugTick(arrow, "已停止移动（位置停滞 {} 次更新），提前解除锁头", data.stationaryUpdates);
-                    iterator.remove();
+                    debugTick(arrow, "已停止移动（位置停滞 {} 次更新），提前解除追踪", data.stationaryUpdates);
+                    toRemove.add(key);
                     continue;
                 }
             } else {
@@ -189,7 +198,7 @@ public final class HomingArrowManager {
             double speed = arrow.getDeltaMovement().length();
             if (speed < ModConfig.minTrackingSpeed()) {
                 debugTick(arrow, "速度过低（{}），解除追踪", String.format("%.3f", speed));
-                iterator.remove();
+                toRemove.add(key);
                 continue;
             }
 
@@ -199,6 +208,10 @@ public final class HomingArrowManager {
             }
 
             performHomingLogic(data);
+        }
+
+        for (UUID key : toRemove) {
+            TRACKING_ARROWS.remove(key);
         }
     }
 
@@ -462,6 +475,6 @@ public final class HomingArrowManager {
         if (arrow.tickCount % 20 != 0) {
             return;
         }
-        HomingArrowsMod.LOGGER.info("[锁头箭] " + message, args);
+        HomingArrowsMod.LOGGER.info("[追踪箭] " + message, args);
     }
 }

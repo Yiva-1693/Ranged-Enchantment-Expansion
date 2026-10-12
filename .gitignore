@@ -43,3 +43,5 @@ src/generated/resources/.cache/
 *.hprof
 hs_err_pid*.log
 replay_pid*.log
+# Forge MDK 源包是本地搭建用的材料，不进版本库
+*-mdk.zip

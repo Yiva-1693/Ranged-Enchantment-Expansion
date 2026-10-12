@@ -96,7 +96,7 @@ public final class ModEvents {
         }
 
         if (ModConfig.debugMode()) {
-            HomingArrowsMod.LOGGER.info("[锁头箭] 玩家 {} 射出了弹体（锁头 {}，失重 {}，搜索半径 {} 格，锥角 {} 度）",
+            HomingArrowsMod.LOGGER.info("[追踪箭] 玩家 {} 射出了弹体（追踪 {}，失重 {}，搜索半径 {} 格，锥角 {} 度）",
                     player.getName().getString(),
                     lockOnLevel,
                     weightlessLevel,
@@ -106,7 +106,7 @@ public final class ModEvents {
     }
 
     /**
-     * 读取玩家身上的锁头附魔等级，兼容弓与弩。
+     * 读取玩家身上的追踪附魔等级，兼容弓与弩。
      * <p>
      * 优先看正在使用的物品（拉弓/弩上弦时最准确），随后回退到主手、副手。
      */
@@ -131,7 +131,7 @@ public final class ModEvents {
     }
 
     /**
-     * 读取玩家身上的失重附魔等级，判定顺序与锁头一致：
+     * 读取玩家身上的失重附魔等级，判定顺序与追踪一致：
      * 正在使用的物品 → 主手 → 副手。
      */
     private static int getWeightlessLevel(Player player) {
@@ -145,7 +145,7 @@ public final class ModEvents {
     }
 
     /**
-     * 读取附魔书上的锁头附魔等级。
+     * 读取附魔书上的追踪附魔等级。
      * <p>
      * 附魔书<strong>必须</strong>把附魔存在 {@code StoredEnchantments} 里；
      * 写成 {@code Enchantments} 的"附魔书"原版是读不到的。但整合包里手改 NBT、
@@ -223,11 +223,11 @@ public final class ModEvents {
     }
 
     // ------------------------------------------------------------------
-    // 白名单：锁头附魔书交互
+    // 白名单：追踪附魔书交互
     // ------------------------------------------------------------------
 
     /**
-     * 手持带锁头附魔的附魔书 + Shift 右键生物 → 切换该个体的白名单状态。
+     * 手持带追踪附魔的附魔书 + Shift 右键生物 → 切换该个体的白名单状态。
      * <p>
      * 之所以用附魔书而不是命令选择器：玩家无法知道、也无法手敲目标 UUID，
      * 而右键交互天然精确指向"眼前这一只"。
@@ -248,13 +248,13 @@ public final class ModEvents {
         }
         int lockOnLevel = getLockOnLevelFromBook(book);
         if (lockOnLevel <= 0) {
-            // 手上这本附魔书没有锁头附魔就安静放行：Shift 右键生物本来就是原版行为，
+            // 手上这本附魔书没有追踪附魔就安静放行：Shift 右键生物本来就是原版行为，
             // 不该因为玩家手里恰好拿着一本别的附魔书就弹提示打扰他。
             return;
         }
 
         // 走到这里说明条件全部满足，记一条日志便于排查「右键无反应」类问题
-        HomingArrowsMod.LOGGER.info("锁头附魔书交互：玩家 {} → {}（{}）",
+        HomingArrowsMod.LOGGER.info("追踪附魔书交互：玩家 {} → {}（{}）",
                 player.getName().getString(),
                 target.getName().getString(),
                 EntityType.getKey(target.getType()));
@@ -270,7 +270,7 @@ public final class ModEvents {
 
         if (target instanceof Player) {
             player.displayClientMessage(
-                    Component.literal("无法将玩家加入锁头白名单").withStyle(ChatFormatting.RED), true);
+                    Component.literal("无法将玩家加入追踪白名单").withStyle(ChatFormatting.RED), true);
             return;
         }
 
@@ -298,8 +298,8 @@ public final class ModEvents {
         String name = target.getName().getString();
         player.displayClientMessage(
                 Component.literal(nowWhitelisted
-                                ? "已将 " + name + " 加入锁头白名单"
-                                : "已将 " + name + " 移出锁头白名单")
+                                ? "已将 " + name + " 加入追踪白名单"
+                                : "已将 " + name + " 移出追踪白名单")
                         .withStyle(nowWhitelisted ? ChatFormatting.GREEN : ChatFormatting.YELLOW), true);
         player.swing(event.getHand(), true);
 
@@ -319,7 +319,7 @@ public final class ModEvents {
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
-        HomingArrowsMod.LOGGER.info("收到 RegisterCommandsEvent，开始注册锁头白名单命令");
+        HomingArrowsMod.LOGGER.info("收到 RegisterCommandsEvent，开始注册追踪白名单命令");
         HomingWhitelistCommand.register(event.getDispatcher(), event.getBuildContext());
     }
 

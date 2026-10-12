@@ -14,7 +14,7 @@ public class ModEnchantments {
             DeferredRegister.create(ForgeRegistries.ENCHANTMENTS, HomingArrowsMod.MOD_ID);
 
     public static final RegistryObject<Enchantment> LOCK_ON =
-            ENCHANTMENTS.register("lock_on", LockOnEnchantment::new);
+            ENCHANTMENTS.register("tracking", LockOnEnchantment::new);
 
     /** 失重：箭矢/三叉戟走直线。 */
     public static final RegistryObject<Enchantment> WEIGHTLESS =
@@ -22,6 +22,6 @@ public class ModEnchantments {
 
     public static void register(IEventBus eventBus) {
         ENCHANTMENTS.register(eventBus);
-        HomingArrowsMod.LOGGER.info("注册锁头、失重附魔...");
+        HomingArrowsMod.LOGGER.info("注册追踪、失重附魔...");
     }
 }

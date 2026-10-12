@@ -23,7 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 全局锁头白名单：名单内的生物不会被任何玩家的追踪箭锁定。
+ * 全局追踪白名单：名单内的生物不会被任何玩家的追踪箭锁定。
  * <p>
  * 支持两种粒度，二者语义不同：
  * <ul>
@@ -32,14 +32,14 @@ import java.util.UUID;
  *   <li><b>种族</b>（按 {@link EntityType}）：豁免该类型的所有个体，<b>包括之后新刷出来的</b>。</li>
  * </ul>
  * 数据通过 {@link net.minecraft.world.level.saveddata.SavedData} 挂载在主世界，落在
- * {@code world/data/homingarrows_whitelist.dat}，因此是跨维度、跨重启的全局生效。
+ * {@code world/data/ranged_enchant_expansion_whitelist.dat}，因此是跨维度、跨重启的全局生效。
  * <p>
  * <b>玩家永远无法进入白名单</b>：{@link #addIndividual} 与 {@link #addType} 都会拒绝。
  */
 public final class HomingWhitelist {
 
     /** 落盘时的数据名，对应 world/data/&lt;name&gt;.dat。 */
-    private static final String DATA_NAME = "homingarrows_whitelist";
+    private static final String DATA_NAME = "ranged_enchant_expansion_whitelist";
 
     private static final String KEY_INDIVIDUALS = "Individuals";
     private static final String KEY_TYPES = "Types";
@@ -64,7 +64,7 @@ public final class HomingWhitelist {
                 HomingWhitelist.SavedData::new,
                 DATA_NAME);
         // 这条日志兼作「白名单系统已就绪」的确认，排查问题时很有用
-        HomingArrowsMod.LOGGER.info("锁头白名单已载入：个体 {} 条，种族 {} 条",
+        HomingArrowsMod.LOGGER.info("追踪白名单已载入：个体 {} 条，种族 {} 条",
                 instance.individualCount(), instance.types().size());
     }
 
@@ -246,7 +246,7 @@ public final class HomingWhitelist {
 
     private static void debug(String message, Object... args) {
         if (ModConfig.debugMode()) {
-            HomingArrowsMod.LOGGER.info("[锁头白名单] " + message, args);
+            HomingArrowsMod.LOGGER.info("[追踪白名单] " + message, args);
         }
     }
 

@@ -1,6 +1,9 @@
 package com.yiva.homingarrows.config;
 
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.common.ForgeConfigSpec;
+
+import java.util.List;
 
 /**
  * 模组配置。
@@ -57,7 +60,14 @@ public final class ModConfig {
     /** 失重弹体的空中寿命上限（秒），0 表示不限制（不推荐）。 */
     public static final ForgeConfigSpec.IntValue WEIGHTLESS_AIR_LIFETIME;
 
+    // ---------------- 附魔互通 ----------------
+    /** 是否开启弓 / 弩 / 三叉戟之间的附魔互通。 */
+    public static final ForgeConfigSpec.BooleanValue INTEROP_ENABLED;
+    /** 互通附魔中额外禁用的条目（形如 minecraft:power 或直接写 power）。 */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> INTEROP_DISABLED;
+
     // ---------------- 默认值（访问器回退用） ----------------
+    private static final boolean DEF_INTEROP_ENABLED = true;
     private static final int DEF_INITIAL_DELAY = 2;
     private static final int DEF_MAX_TRACKING_TIME = 8;
     private static final double DEF_MIN_TRACKING_SPEED = 0.1D;
@@ -149,6 +159,24 @@ public final class ModConfig {
 
         BUILDER.pop();
 
+        BUILDER.push("附魔互通设置");
+
+        INTEROP_ENABLED = BUILDER
+                .comment("是否开启弓 / 弩 / 三叉戟之间的附魔互通。",
+                        "开启后：力量/冲击/火矢/无限/快速装填/多重射击/穿透/穿刺/忠诚/激流/引雷/",
+                        "锋利/亡灵杀手/节肢杀手/抢夺等武器类附魔可以在三种武器之间互相附魔（附魔台、",
+                        "铁砧、/enchant 三条路径同时生效），并由本模组补齐原本没有的效果。",
+                        "按需求表，无限对三叉戟、忠诚与激流对弓弩、多重射击与快速装填对三叉戟仍不互通。",
+                        "关闭后完全恢复原版附魔适用性。")
+                .define("interopEnabled", DEF_INTEROP_ENABLED);
+
+        INTEROP_DISABLED = BUILDER
+                .comment("在互通白名单里额外禁用的附魔，写完整 ID（minecraft:power）或只写路径（power）均可。",
+                        "默认留空。")
+                .defineList("interopDisabledEnchantments", List.of(), o -> o instanceof String);
+
+        BUILDER.pop();
+
         SPEC = BUILDER.build();
     }
 
@@ -233,6 +261,35 @@ public final class ModConfig {
     public static int projectileAirLifetimeTicks() {
         int seconds = get(PROJECTILE_AIR_LIFETIME, DEF_PROJECTILE_AIR_LIFETIME);
         return seconds <= 0 ? 0 : seconds * 20;
+    }
+
+    /** 是否开启附魔互通。 */
+    public static boolean interopEnabled() {
+        return get(INTEROP_ENABLED, DEF_INTEROP_ENABLED);
+    }
+
+    /** 某个附魔是否被额外禁用（互通白名单的例外项）。 */
+    public static boolean isInteropDisabled(ResourceLocation id) {
+        if (id == null) {
+            return false;
+        }
+        List<? extends String> disabled = get(INTEROP_DISABLED, List.of());
+        if (disabled.isEmpty()) {
+            return false;
+        }
+        String full = id.toString();
+        for (String entry : disabled) {
+            if (entry == null || entry.isBlank()) {
+                continue;
+            }
+            String trimmed = entry.trim();
+            if (full.equalsIgnoreCase(trimmed)
+                    || id.getPath().equalsIgnoreCase(trimmed)
+                    || ("minecraft:" + trimmed).equalsIgnoreCase(full)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -1,8 +1,7 @@
 package com.yiva.homingarrows.enchantment;
 
+import com.yiva.homingarrows.interop.EnchantmentInterop;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.item.BowItem;
-import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentCategory;
@@ -42,10 +41,10 @@ public class WeightlessEnchantment extends Enchantment {
         return 55;
     }
 
-    /** 兼容弓与弩，其余物品不可附魔。 */
+    /** 兼容弓、弩与三叉戟，其余物品不可附魔。 */
     @Override
     public boolean canEnchant(ItemStack stack) {
-        return stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem;
+        return EnchantmentInterop.isInteropWeapon(stack);
     }
 
     @Override

@@ -1,14 +1,13 @@
 package com.yiva.homingarrows.enchantment;
 
+import com.yiva.homingarrows.interop.EnchantmentInterop;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.item.BowItem;
-import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentCategory;
 
 /**
- * "锁头"附魔：附有此附魔的弓或弩射出的箭矢会自动追踪附近的目标。
+ * "追踪"附魔：附有此附魔的弓、弩射出的箭矢，以及投掷出的三叉戟，会自动追踪附近的目标。
  * <p>
  * 单级附魔，仅作用于主手，不限制宝藏专属，因此可以通过附魔台、战利品和村民交易获得。
  */
@@ -38,10 +37,10 @@ public class LockOnEnchantment extends Enchantment {
         return 50;
     }
 
-    /** 兼容弓与弩，其余物品不可附魔。 */
+    /** 兼容弓、弩与三叉戟，其余物品不可附魔。 */
     @Override
     public boolean canEnchant(ItemStack stack) {
-        return stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem;
+        return EnchantmentInterop.isInteropWeapon(stack);
     }
 
     @Override

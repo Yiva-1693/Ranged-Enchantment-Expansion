@@ -31,9 +31,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 锁头白名单管理命令。
+ * 追踪白名单管理命令。
  * <p>
- * 个体条目除了可以用这里的 {@code remove} 移除，也可以直接用锁头附魔书
+ * 个体条目除了可以用这里的 {@code remove} 移除，也可以直接用追踪附魔书
  * Shift 右键该生物来切换（见 {@code ModEvents#onEntityInteract}）。
  * 种族条目只能用 {@code addtype} / {@code remove type} 管理。
  */
@@ -43,10 +43,10 @@ public final class HomingWhitelistCommand {
     public static final String ARG_TYPE = "entity_type";
 
     private static final SimpleCommandExceptionType ERROR_NO_PLAYER =
-            new SimpleCommandExceptionType(Component.literal("无法将玩家加入锁头白名单"));
+            new SimpleCommandExceptionType(Component.literal("无法将玩家加入追踪白名单"));
 
     private static final DynamicCommandExceptionType ERROR_NOT_LIVING =
-            new DynamicCommandExceptionType(type -> Component.literal("目标不是生物，无法加入锁头白名单：" + type));
+            new DynamicCommandExceptionType(type -> Component.literal("目标不是生物，无法加入追踪白名单：" + type));
 
     private HomingWhitelistCommand() {
     }
@@ -90,8 +90,8 @@ public final class HomingWhitelistCommand {
     /** 不带子命令时给出用法提示，避免玩家对着空响应发呆。 */
     private static int showUsage(CommandContext<CommandSourceStack> ctx, String name) {
         CommandSourceStack source = ctx.getSource();
-        source.sendSuccess(() -> Component.literal("===== 锁头白名单 =====").withStyle(ChatFormatting.GOLD), false);
-        source.sendSuccess(() -> Component.literal("个体：手持带锁头附魔的附魔书 + Shift 右键生物（再次右键取消）")
+        source.sendSuccess(() -> Component.literal("===== 追踪白名单 =====").withStyle(ChatFormatting.GOLD), false);
+        source.sendSuccess(() -> Component.literal("个体：手持带追踪附魔的附魔书 + Shift 右键生物（再次右键取消）")
                 .withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal("/" + name + " addtype <实体类型>  ")
                 .append(Component.literal("整个种族加入白名单").withStyle(ChatFormatting.GRAY)), false);
@@ -125,9 +125,9 @@ public final class HomingWhitelistCommand {
         if (HomingWhitelist.addType(type)) {
             source.sendSuccess(() -> Component.literal("已将 ")
                     .append(describe(type))
-                    .append(" 整体加入锁头白名单（包括以后新生成的个体）"), true);
+                    .append(" 整体加入追踪白名单（包括以后新生成的个体）"), true);
         } else {
-            source.sendSuccess(() -> Component.literal("该类型已在锁头白名单中：")
+            source.sendSuccess(() -> Component.literal("该类型已在追踪白名单中：")
                     .append(describe(type)), false);
         }
         return 1;
@@ -142,25 +142,25 @@ public final class HomingWhitelistCommand {
         CommandSourceStack source = ctx.getSource();
 
         if (!(target instanceof LivingEntity living)) {
-            source.sendFailure(Component.literal("目标不是生物，不在锁头白名单中"));
+            source.sendFailure(Component.literal("目标不是生物，不在追踪白名单中"));
             return 0;
         }
         if (target instanceof Player) {
-            source.sendFailure(Component.literal("玩家不在锁头白名单中"));
+            source.sendFailure(Component.literal("玩家不在追踪白名单中"));
             return 0;
         }
 
         UUID id = target.getUUID();
         String name = target.getName().getString();
         if (HomingWhitelist.removeIndividual(living)) {
-            source.sendSuccess(() -> Component.literal("已将 " + name + " 移出锁头白名单（个体条目 " + id + "）"), true);
+            source.sendSuccess(() -> Component.literal("已将 " + name + " 移出追踪白名单（个体条目 " + id + "）"), true);
         } else {
             // 可能只在其种族条目里，给出明确提示而不是含糊的“没找到”
             if (HomingWhitelist.isWhitelisted(target)) {
                 source.sendSuccess(() -> Component.literal(name
                         + " 没有个体条目，但它所属的类型整体在白名单中，请用 /homingwhitelist remove type 移除"), false);
             } else {
-                source.sendSuccess(() -> Component.literal(name + " 不在锁头白名单中"), false);
+                source.sendSuccess(() -> Component.literal(name + " 不在追踪白名单中"), false);
             }
         }
         return 1;
@@ -175,9 +175,9 @@ public final class HomingWhitelistCommand {
         if (HomingWhitelist.removeType(type)) {
             source.sendSuccess(() -> Component.literal("已将 ")
                     .append(describe(type))
-                    .append(" 移出锁头白名单（种族条目）"), true);
+                    .append(" 移出追踪白名单（种族条目）"), true);
         } else {
-            source.sendSuccess(() -> Component.literal("该类型不在锁头白名单中：")
+            source.sendSuccess(() -> Component.literal("该类型不在追踪白名单中：")
                     .append(describe(type)), false);
         }
         return 1;
@@ -212,12 +212,12 @@ public final class HomingWhitelistCommand {
         HomingArrowsMod.LOGGER.info("/homingwhitelist list 被执行：个体 {} 条，种族 {} 条",
                 individuals.size(), types.size());
 
-        send(source, "===== 锁头白名单：个体 " + individuals.size() + " 条 / 种族 " + types.size() + " 条 =====");
+        send(source, "===== 追踪白名单：个体 " + individuals.size() + " 条 / 种族 " + types.size() + " 条 =====");
 
         if (individuals.isEmpty() && types.isEmpty()) {
             send(source, "白名单当前为空");
             send(source, "添加方式：/homingwhitelist addtype <实体类型> 添加整个种族");
-            send(source, "或：手持带「锁头」附魔的附魔书，Shift 右键生物添加该个体");
+            send(source, "或：手持带「追踪」附魔的附魔书，Shift 右键生物添加该个体");
             return 0;
         }
 
@@ -254,7 +254,7 @@ public final class HomingWhitelistCommand {
         CommandSourceStack source = ctx.getSource();
         int total = HomingWhitelist.individualCount() + HomingWhitelist.typeCount();
         HomingWhitelist.clearAll();
-        source.sendSuccess(() -> Component.literal("已清空锁头白名单，共移除 " + total + " 条条目"), true);
+        source.sendSuccess(() -> Component.literal("已清空追踪白名单，共移除 " + total + " 条条目"), true);
         return total;
     }
 

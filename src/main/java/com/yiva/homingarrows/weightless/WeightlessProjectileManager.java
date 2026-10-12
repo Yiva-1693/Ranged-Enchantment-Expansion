@@ -158,7 +158,7 @@ public final class WeightlessProjectileManager {
             tracked.ticks++;
 
             // 停住了（插进方块/落地）→ 立刻停止干预，把控制权交还忠诚。
-            // 位置停滞判定与锁头用的是同一套；不能用 onGround()，因为
+            // 位置停滞判定与追踪用的是同一套；不能用 onGround()，因为
             // AbstractArrow.tick() 只写 inGround，从不调用 setOnGround。
             Vec3 currentPos = projectile.position();
             boolean stationary = tracked.lastPos != null

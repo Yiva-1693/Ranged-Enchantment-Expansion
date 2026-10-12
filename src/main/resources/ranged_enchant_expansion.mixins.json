@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.yiva.homingarrows.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "ranged_enchant_expansion.refmap.json",
+  "mixins": [
+    "EnchantmentMixin",
+    "ThrownTridentMixin",
+    "CrossbowItemMixin",
+    "LivingEntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

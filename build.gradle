@@ -4,6 +4,10 @@ plugins {
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'org.parchmentmc.librarian.forgegradle' version '1.+'
+    // Mixin 支持：负责生成 refmap，把下面 mixins.json 里的官方名映射成生产环境的 SRG 名。
+    // 成品包是 reobf 到 SRG 的，而 Mixin 注解里的方法名/字段名是字符串、reobf 改不到，
+    // 没有 refmap 就会在正式环境注入失败。
+    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
 version = mod_version
@@ -56,6 +60,11 @@ minecraft {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+mixin {
+    add sourceSets.main, "${mod_id}.refmap.json"
+    config "${mod_id}.mixins.json"
+}
+
 repositories {
     // 添加 Forge Maven 仓库
     maven {
@@ -78,6 +87,9 @@ repositories {
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // Mixin 注解处理器：生成 refmap（官方名 → SRG 名），并在编译期校验注入点
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -110,7 +122,11 @@ tasks.named('jar', Jar).configure {
                 "Implementation-Title": project.name,
                 "Implementation-Version": project.jar.archiveVersion,
                 "Implementation-Vendor": mod_authors,
-                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                // Forge 1.20.1 用 jar 清单属性登记 Mixin 配置（mods.toml 没有 mixins 段，那是 NeoForge 的写法）。
+                // 成品包靠这一项；开发环境因为模组以"目录形式"加载、读不到本清单，
+                // 所以 src/main/resources/META-INF/MANIFEST.MF 里放了一份同样内容的清单，两者缺一不可。
+                "MixinConfigs": "${mod_id}.mixins.json"
         ])
     }
 
