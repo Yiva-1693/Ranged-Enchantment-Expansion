@@ -47,6 +47,16 @@ public final class ModConfig {
     /** 调试模式（向日志输出更多信息）。 */
     public static final ForgeConfigSpec.BooleanValue DEBUG_MODE;
 
+    // ---------------- 弹体寿命 ----------------
+    /** 箭矢/三叉戟离弦后的空中寿命上限（秒），0 表示不限制。 */
+    public static final ForgeConfigSpec.IntValue PROJECTILE_AIR_LIFETIME;
+
+    // ---------------- 失重附魔 ----------------
+    /** 三叉戟失重生效时长（秒），超时恢复抛物线。 */
+    public static final ForgeConfigSpec.IntValue WEIGHTLESS_TRIDENT_TIME;
+    /** 失重弹体的空中寿命上限（秒），0 表示不限制（不推荐）。 */
+    public static final ForgeConfigSpec.IntValue WEIGHTLESS_AIR_LIFETIME;
+
     // ---------------- 默认值（访问器回退用） ----------------
     private static final int DEF_INITIAL_DELAY = 2;
     private static final int DEF_MAX_TRACKING_TIME = 8;
@@ -59,6 +69,9 @@ public final class ModConfig {
     private static final boolean DEF_SHOW_PARTICLES = false;
     private static final int DEF_PARTICLE_INTERVAL = 2;
     private static final boolean DEF_DEBUG_MODE = false;
+    private static final int DEF_WEIGHTLESS_TRIDENT_TIME = 8;
+    private static final int DEF_WEIGHTLESS_AIR_LIFETIME = 60;
+    private static final int DEF_PROJECTILE_AIR_LIFETIME = 60;
 
     static {
         BUILDER.push("追踪箭设置");
@@ -112,6 +125,30 @@ public final class ModConfig {
                 .define("debugMode", DEF_DEBUG_MODE);
 
         BUILDER.pop();
+
+        BUILDER.push("弹体寿命设置");
+
+        PROJECTILE_AIR_LIFETIME = BUILDER
+                .comment("箭矢/三叉戟离弦后的空中寿命上限（秒），到期即消失。"
+                        + "原版的 1200 刻寿命只在箭插在方块里时累加，空中飞行没有上限，"
+                        + "直线弹道又永远不会自己落下，因此需要这条兜底。0 表示不限制")
+                .defineInRange("projectileAirLifetime", DEF_PROJECTILE_AIR_LIFETIME, 0, 600);
+
+        BUILDER.pop();
+
+        BUILDER.push("失重附魔设置");
+
+        WEIGHTLESS_TRIDENT_TIME = BUILDER
+                .comment("三叉戟失重生效时长（秒），超时后恢复抛物线，避免三叉戟一去不返")
+                .defineInRange("tridentWeightlessTime", DEF_WEIGHTLESS_TRIDENT_TIME, 1, 60);
+
+        WEIGHTLESS_AIR_LIFETIME = BUILDER
+                .comment("失重弹体的空中寿命上限（秒）。原版箭矢只在插地时计时，空中飞行没有上限，"
+                        + "直线弹道又永远不会自己落下，因此必须限制以免实体无限累积。0 表示不限制")
+                .defineInRange("weightlessAirLifetime", DEF_WEIGHTLESS_AIR_LIFETIME, 0, 600);
+
+        BUILDER.pop();
+
         SPEC = BUILDER.build();
     }
 
@@ -171,6 +208,31 @@ public final class ModConfig {
     /** 是否开启调试日志。 */
     public static boolean debugMode() {
         return get(DEBUG_MODE, DEF_DEBUG_MODE);
+    }
+
+    /** 三叉戟失重生效时长（游戏刻）。 */
+    public static int weightlessTridentTicks() {
+        return Math.max(1, get(WEIGHTLESS_TRIDENT_TIME, DEF_WEIGHTLESS_TRIDENT_TIME)) * 20;
+    }
+
+    /**
+     * 失重弹体的空中寿命上限（游戏刻）。
+     *
+     * @return 0 表示不限制
+     */
+    public static int weightlessAirLifetimeTicks() {
+        int seconds = get(WEIGHTLESS_AIR_LIFETIME, DEF_WEIGHTLESS_AIR_LIFETIME);
+        return seconds <= 0 ? 0 : seconds * 20;
+    }
+
+    /**
+     * 箭矢/三叉戟离弦后的空中寿命上限（游戏刻）。
+     *
+     * @return 0 表示不限制
+     */
+    public static int projectileAirLifetimeTicks() {
+        int seconds = get(PROJECTILE_AIR_LIFETIME, DEF_PROJECTILE_AIR_LIFETIME);
+        return seconds <= 0 ? 0 : seconds * 20;
     }
 
     /**

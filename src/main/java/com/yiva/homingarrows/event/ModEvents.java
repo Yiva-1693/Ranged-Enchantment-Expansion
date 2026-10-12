@@ -3,6 +3,8 @@ package com.yiva.homingarrows.event;
 import com.yiva.homingarrows.HomingArrowsMod;
 import com.yiva.homingarrows.config.ModConfig;
 import com.yiva.homingarrows.init.ModEnchantments;
+import com.yiva.homingarrows.projectile.ProjectileLifetimeManager;
+import com.yiva.homingarrows.weightless.WeightlessProjectileManager;
 import com.yiva.homingarrows.whitelist.HomingWhitelist;
 import com.yiva.homingarrows.whitelist.HomingWhitelistCommand;
 import net.minecraft.ChatFormatting;
@@ -23,6 +25,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
@@ -71,18 +74,32 @@ public final class ModEvents {
         }
 
         int lockOnLevel = getLockOnLevel(player);
-        if (lockOnLevel <= 0) {
+        int weightlessLevel = getWeightlessLevel(player);
+
+        // 离弦计时：所有玩家射出的箭矢/三叉戟都受空中寿命上限约束。
+        // 原版的寿命只在插地时累加，空中飞行没有上限，直线弹道更是永不落下。
+        ProjectileLifetimeManager.track(arrow);
+
+        // 标记为追踪箭，并设置为单人锁定模式
+        if (lockOnLevel > 0) {
+            arrow.getPersistentData().putBoolean(HomingArrowManager.TAG_LOCK_ON_ARROW, true);
+            HomingArrowManager.addArrow(arrow);
+        }
+
+        // 失重附魔：让弹体走直线（三叉戟只在一段时间内生效）
+        if (weightlessLevel > 0) {
+            WeightlessProjectileManager.markWeightless(arrow);
+        }
+
+        if (lockOnLevel <= 0 && weightlessLevel <= 0) {
             return;
         }
 
-        // 标记为追踪箭，并设置为单人锁定模式
-        arrow.getPersistentData().putBoolean(HomingArrowManager.TAG_LOCK_ON_ARROW, true);
-        HomingArrowManager.addArrow(arrow);
-
         if (ModConfig.debugMode()) {
-            HomingArrowsMod.LOGGER.info("[锁头箭] 玩家 {} 射出了追踪箭（附魔等级 {}，搜索半径 {} 格，锥角 {} 度）",
+            HomingArrowsMod.LOGGER.info("[锁头箭] 玩家 {} 射出了弹体（锁头 {}，失重 {}，搜索半径 {} 格，锥角 {} 度）",
                     player.getName().getString(),
                     lockOnLevel,
+                    weightlessLevel,
                     String.format("%.1f", ModConfig.maxTrackingRange()),
                     String.format("%.1f", Math.toDegrees(Math.acos(ModConfig.coneCosine()))));
         }
@@ -111,6 +128,20 @@ public final class ModEvents {
         }
         // 使用 ItemStack 上的实例方法，EnchantmentHelper.getItemEnchantmentLevel 在 1.20.1 已废弃
         return stack.getEnchantmentLevel(ModEnchantments.LOCK_ON.get());
+    }
+
+    /**
+     * 读取玩家身上的失重附魔等级，判定顺序与锁头一致：
+     * 正在使用的物品 → 主手 → 副手。
+     */
+    private static int getWeightlessLevel(Player player) {
+        return Math.max(levelOf(player.getUseItem(), ModEnchantments.WEIGHTLESS.get()),
+                Math.max(levelOf(player.getMainHandItem(), ModEnchantments.WEIGHTLESS.get()),
+                        levelOf(player.getOffhandItem(), ModEnchantments.WEIGHTLESS.get())));
+    }
+
+    private static int levelOf(ItemStack stack, Enchantment enchantment) {
+        return stack.isEmpty() ? 0 : stack.getEnchantmentLevel(enchantment);
     }
 
     /**
@@ -166,11 +197,13 @@ public final class ModEvents {
     // 生命周期与清理
     // ------------------------------------------------------------------
 
-    /** 箭矢离开世界（被拾取、区块卸载、跨维度、命中消失）时清理追踪数据。 */
+    /** 弹体离开世界（被拾取、区块卸载、跨维度、命中消失）时清理追踪数据。 */
     @SubscribeEvent
     public static void onEntityLeaveLevel(EntityLeaveLevelEvent event) {
         if (event.getEntity() instanceof AbstractArrow arrow) {
             HomingArrowManager.removeArrow(arrow);
+            WeightlessProjectileManager.remove(arrow);
+            ProjectileLifetimeManager.remove(arrow);
         }
     }
 
@@ -184,6 +217,8 @@ public final class ModEvents {
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         HomingArrowManager.clearAll();
+        WeightlessProjectileManager.clearAll();
+        ProjectileLifetimeManager.clearAll();
         HomingWhitelist.unload();
     }
 
@@ -294,8 +329,11 @@ public final class ModEvents {
 
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
-        // 只在 END 相位推进一次，避免每刻重复制导
+        // 只在 END 相位推进一次，避免每刻重复制导。
+        // 失重的拨正也必须放在实体 tick 之后，否则会被原版随后施加的重力覆盖。
         if (event.phase == TickEvent.Phase.END) {
+            WeightlessProjectileManager.updateAll();
+            ProjectileLifetimeManager.updateAll();
             HomingArrowManager.updateAllArrows();
         }
     }
