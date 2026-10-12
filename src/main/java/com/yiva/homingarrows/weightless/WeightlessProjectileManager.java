@@ -18,30 +18,34 @@ import java.util.UUID;
  * 原版 {@code AbstractArrow.tick()} 对弹体做两件事，都会破坏直线飞行：
  * <ol>
  *   <li><b>重力</b>：{@code deltaMovement.y -= 0.05}。这段带原版开关
- *       {@code if (!isNoGravity() && ...)}，因此 {@code setNoGravity(true)} 就能从源头关掉；
+ *       {@code if (!isNoGravity() && ...)}，因此 {@code setNoGravity(true)} 即可从源头关掉；
  *       它还是同步数据 {@code DATA_NO_GRAVITY}，客户端同样生效。</li>
  *   <li><b>拖拽</b>：{@code deltaMovement = deltaMovement.scale(0.99)}，<b>无条件执行</b>
- *       （反编译确认 {@code isNoGravity} 在 tick() 中只出现一次，只管重力那段）。
- *       每刻掉 1%，60 刻后只剩约 0.55 —— 这就是"越飞越慢"。</li>
+ *       （反编译确认 {@code isNoGravity} 在整个 tick() 中只出现一次，只管重力那段）。
+ *       每刻掉 1%，60 刻后只剩约 0.55 —— 这就是"越飞越慢"。拖拽没有原版开关，
+ *       只能每刻把速度覆盖回初速度来抵消。</li>
  * </ol>
- * 拖拽没有原版开关，所以这里每刻把速度<b>直接覆盖回初速度</b>。
  * <p>
- * <b>两个踩过的坑，改代码时务必保留：</b>
- * <ul>
- *   <li><b>不要设置 {@code hasImpulse}</b>：每刻置位会每刻强制向客户端广播一次速度，
- *       与客户端自身的运动预测互相打架，表现为「原地疯狂颤抖」。</li>
- *   <li><b>不要在遍历中改动 {@code TRACKED}</b>：之前两次服务器崩溃
- *       （{@code ConcurrentModificationException}，分别抛在
- *       {@code HashIterator.remove} 与 {@code nextNode}）都是这个原因。
- *       这里用 key 快照遍历、循环结束后统一移除。</li>
- * </ul>
+ * <b>与忠诚附魔的冲突（务必保留停止条件）：</b>忠诚每刻给三叉戟施加"朝主人飞"的牵引
+ * （{@code deltaMovement = deltaMovement * 0.95 + dir * 0.05 * level}）。如果我们一直把
+ * 速度覆盖成出射速度，就会把这个牵引逐刻抹掉，三叉戟既不减速也不回头 —— 表现为
+ * "装了失重就飞走收不回来"。因此一旦弹体<b>停下（插进方块/落地）</b>就立刻停止失重干预，
+ * 把控制权完整交还忠诚，不必等失重窗口结束。
  * <p>
- * 三叉戟额外限制：只在出手后的配置时长内失重（默认 8 秒），之后恢复重力与抛物线，
- * 避免三叉戟一去不返。
+ * 顺带说明原版机制：忠诚的返回并不要求插地 —— 反编译可见只要
+ * {@code loyalty > 0} 且（{@code dealtDamage} 或 {@code isNoPhysics}）且主人可接受即可返回，
+ * 所以原版忠诚 3 即使扔向虚空也会自己飞回（主人需存活、非观察者、同维度）。
+ * <p>
+ * 三叉戟额外限制：只在出手后的配置时长内失重（默认 3 秒），之后恢复重力与抛物线。
+ * 另外一旦插进方块/落地也会立即停止干预（见下方"与忠诚附魔的冲突"），
+ * 所以实际失重距离通常比这个窗口更短。
  */
 public final class WeightlessProjectileManager {
 
     private static final Map<UUID, Tracked> TRACKED = new HashMap<>();
+
+    /** 位置停滞判定阈值（格²）。飞行中每刻位移远超此值，只有停住才会低于它。 */
+    private static final double STATIONARY_DELTA_SQR = 1.0E-4D;
 
     private WeightlessProjectileManager() {
     }
@@ -49,8 +53,10 @@ public final class WeightlessProjectileManager {
     /** 单个失重弹的运行状态。 */
     private static final class Tracked {
         final AbstractArrow projectile;
-        /** 出射速度，生成时记录一次，之后每刻覆盖回去。 */
+        /** 出射速度，生成时记录一次，之后每刻覆盖回去以抵消拖拽。 */
         final Vec3 launchVelocity;
+        /** 上一次 tick 的位置，用于检测"停住了"。 */
+        Vec3 lastPos;
         int ticks;
 
         Tracked(AbstractArrow projectile, Vec3 launchVelocity) {
@@ -75,7 +81,7 @@ public final class WeightlessProjectileManager {
         }
 
         Vec3 launch = projectile.getDeltaMovement();
-        // 重力从源头关掉
+        // 重力从源头关掉（同步数据，客户端同样生效）
         projectile.setNoGravity(true);
         TRACKED.put(projectile.getUUID(), new Tracked(projectile, launch));
 
@@ -85,10 +91,19 @@ public final class WeightlessProjectileManager {
         }
     }
 
-    /** 恢复某支弹体的重力（三叉戟失重窗口结束时使用）。 */
+    /** 恢复某支弹体的重力。 */
     public static void restoreGravity(AbstractArrow projectile) {
         if (projectile != null && !projectile.isRemoved()) {
             projectile.setNoGravity(false);
+        }
+    }
+
+    /** 停止失重干预并还回重力，把控制权交还原版（忠诚等）。 */
+    private static void stopWeightless(UUID key, Tracked tracked, String reason) {
+        restoreGravity(tracked.projectile);
+        TRACKED.remove(key);
+        if (ModConfig.debugMode()) {
+            HomingArrowsMod.LOGGER.info("[失重] 停止失重干预（{}），交还原版物理", reason);
         }
     }
 
@@ -142,13 +157,22 @@ public final class WeightlessProjectileManager {
 
             tracked.ticks++;
 
+            // 停住了（插进方块/落地）→ 立刻停止干预，把控制权交还忠诚。
+            // 位置停滞判定与锁头用的是同一套；不能用 onGround()，因为
+            // AbstractArrow.tick() 只写 inGround，从不调用 setOnGround。
+            Vec3 currentPos = projectile.position();
+            boolean stationary = tracked.lastPos != null
+                    && currentPos.distanceToSqr(tracked.lastPos) < STATIONARY_DELTA_SQR;
+            tracked.lastPos = currentPos;
+
+            if (stationary) {
+                stopWeightless(key, tracked, "已插入方块/落地");
+                continue;
+            }
+
             // 三叉戟：失重窗口结束 → 还回重力，交还原版抛物线
             if (projectile instanceof ThrownTrident && tracked.ticks > tridentWindow) {
-                restoreGravity(projectile);
-                toRemove.add(key);
-                if (debug) {
-                    HomingArrowsMod.LOGGER.info("[失重] 三叉戟失重窗口结束，恢复重力与抛物线");
-                }
+                stopWeightless(key, tracked, "三叉戟失重窗口结束");
                 continue;
             }
 
@@ -164,26 +188,13 @@ public final class WeightlessProjectileManager {
             }
 
             // 核心：把速度覆盖回初速度，抵消原版每刻的 drag（deltaMovement *= 0.99）。
-            // 已插地/入水的弹体不动它，免得把插在方块里的箭拔出来。
-            if (!projectile.onGround() && !projectile.isInWater()) {
-                Vec3 current = projectile.getDeltaMovement();
-                // 只在偏差明显时才纠正：每刻无条件写速度会每刻广播一次运动包，
-                // 与客户端预测互相打架，表现为「原地疯狂颤抖」。
-                if (current.distanceToSqr(tracked.launchVelocity) > 1.0E-6D) {
-                    projectile.setDeltaMovement(tracked.launchVelocity);
-                    // hasImpulse 让服务端把这次速度变化同步给客户端。
-                    // 缺了它客户端会一直用自己被 drag 衰减到接近 0 的速度演算，
-                    // 表现为「先卡住、再被位置包拽到前面」的向前闪现。
-                    projectile.hasImpulse = true;
-                }
-            }
-
-            // 速度观测：应恒定等于出射速度
-            if (debug && tracked.ticks % 20 == 0) {
-                HomingArrowsMod.LOGGER.info("[失重] 第 {} 刻：当前速度 {}，出射速度 {}",
-                        tracked.ticks,
-                        String.format("%.3f", projectile.getDeltaMovement().length()),
-                        String.format("%.3f", tracked.launchVelocity.length()));
+            // 注意必须每刻覆盖——忠诚的牵引也会被一起抹掉，所以上面必须先判"停住"。
+            Vec3 current = projectile.getDeltaMovement();
+            if (current.distanceToSqr(tracked.launchVelocity) > 1.0E-6D) {
+                projectile.setDeltaMovement(tracked.launchVelocity);
+                // hasImpulse 让服务端把这次速度变化同步给客户端。
+                // 缺了它客户端会按自己被 drag 衰减的速度演算，表现为"先卡住再被拽到前面"的闪现。
+                projectile.hasImpulse = true;
             }
         }
 

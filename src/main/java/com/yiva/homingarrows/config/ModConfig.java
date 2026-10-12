@@ -69,7 +69,7 @@ public final class ModConfig {
     private static final boolean DEF_SHOW_PARTICLES = false;
     private static final int DEF_PARTICLE_INTERVAL = 2;
     private static final boolean DEF_DEBUG_MODE = false;
-    private static final int DEF_WEIGHTLESS_TRIDENT_TIME = 8;
+    private static final int DEF_WEIGHTLESS_TRIDENT_TIME = 3;
     private static final int DEF_WEIGHTLESS_AIR_LIFETIME = 60;
     private static final int DEF_PROJECTILE_AIR_LIFETIME = 60;
 
