@@ -16,8 +16,8 @@ import java.util.UUID;
  * 所属的 {@code AbstractHurtingProjectile}（烈焰弹等）更是完全没有寿命逻辑。
  * 直线弹道永远不会自己落下来，因此必须有这条兜底规则，否则实体只会不断堆积。
  * <p>
- * 这里对所有玩家射出的箭矢/三叉戟统一计时（不只是失重弹），达到配置秒数即丢弃。
- * 射中方块后箭矢会插住，原版自己的落地清除逻辑会接管，所以这里不必区分。
+ * 这里对所有玩家射出的箭矢/三叉戟累计空中飞行时间（不只是失重弹），达到配置秒数即丢弃。
+ * 插入方块期间不累计飞行时间，也不执行空中清理，拾取、消失和忠诚返回交给原版处理。
  */
 public final class ProjectileLifetimeManager {
 
@@ -57,7 +57,7 @@ public final class ProjectileLifetimeManager {
     }
 
     /**
-     * 由服务端 tick 驱动，推进所有弹体的离弦计时。
+     * 由服务端 tick 驱动，仅推进正在空中飞行的弹体计时。
      */
     public static void updateAll() {
         if (TRACKED.isEmpty()) {
@@ -80,6 +80,12 @@ public final class ProjectileLifetimeManager {
             if (projectile == null || !projectile.isAlive() || projectile.isRemoved()
                     || projectile.level().isClientSide()) {
                 toRemove.add(key);
+                continue;
+            }
+
+            // 与 AbstractArrow.tick 的落地分支一致；忠诚返回的 noPhysics 三叉戟仍算飞行。
+            if (projectile instanceof AbstractArrowAccess access
+                    && access.homingarrows$isInGround() && !projectile.isNoPhysics()) {
                 continue;
             }
 

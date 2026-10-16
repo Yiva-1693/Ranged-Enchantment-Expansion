@@ -66,6 +66,9 @@ public final class InteropProjectileHandler {
     /** 克隆箭标记：克隆体进入世界时不再克隆、也不重复做发射瞬间的处理。 */
     private static final String TAG_MULTISHOT_CLONE = "ranged_enchant_expansion:multishotClone";
 
+    /** 发射期属性只初始化一次，跨区块/维度重新加入世界时保留已有快照与箭矢数量。 */
+    private static final String TAG_INTEROP_INITIALIZED = "ranged_enchant_expansion:interopInitialized";
+
     /**
      * 多重射击齐射标记：主箭与克隆体都会带上。
      * <p>
@@ -104,11 +107,18 @@ public final class InteropProjectileHandler {
         if (!(event.getEntity() instanceof AbstractArrow arrow)) {
             return;
         }
-        if (!(arrow.getOwner() instanceof Player player)) {
+        // 我们自己克隆出来的额外箭矢：不再克隆，也无需重复处理
+        CompoundTag data = arrow.getPersistentData();
+        if (data.getBoolean(TAG_MULTISHOT_CLONE)) {
+            // 同时修正旧存档中已生成的可回收克隆箭。
+            arrow.pickup = AbstractArrow.Pickup.CREATIVE_ONLY;
             return;
         }
-        // 我们自己克隆出来的额外箭矢：不再克隆，也无需重复处理
-        if (arrow.getPersistentData().getBoolean(TAG_MULTISHOT_CLONE)) {
+        // 旧存档没有初始化标记，也不能根据射手此刻持有的武器重新发射或覆盖快照。
+        if (event.loadedFromDisk() || data.getBoolean(TAG_INTEROP_INITIALIZED)) {
+            return;
+        }
+        if (!(arrow.getOwner() instanceof Player player)) {
             return;
         }
 
@@ -118,6 +128,8 @@ public final class InteropProjectileHandler {
             return;
         }
 
+        // 在生成克隆箭前标记，后续重新入场不再执行发射初始化。
+        data.putBoolean(TAG_INTEROP_INITIALIZED, true);
         // 命中时才需要知道目标类型/掉落，武器整份快照存进弹体
         ProjectileWeaponSnapshot.capture(arrow, weapon);
 
@@ -180,8 +192,9 @@ public final class InteropProjectileHandler {
      * {@link #MULTISHOT_LATERAL_OFFSET} 格。三条轨迹互相平行、间距恒定，既能看出是三支箭，
      * 又始终打向同一个方向、命中同一点附近。
      * <p>
-     * 克隆体其余状态照抄主箭：伤害、击退、穿透、暴击、着火与源武器快照；默认的 {@code pickup} 是
-     * {@code DISALLOWED}，因此不会被捡回，也就不会出现"一箭变三箭"的复制漏洞。
+     * 克隆体其余状态照抄主箭：伤害、击退、穿透、暴击、着火与源武器快照。
+     * {@code setOwner(player)} 会把拾取状态改成 {@code ALLOWED}，因此必须在之后显式设为
+     * {@code CREATIVE_ONLY}，与原版弩的额外箭一致，避免生存模式出现"一箭变三箭"。
      * <p>
      * 另外给主箭与克隆体都打上 {@link #TAG_MULTISHOT_VOLLEY}：几支箭先后命中时，原版受击无敌帧
      * 只会让第一支造成伤害，后几支连事件都不会触发（见 {@link InteropCombatHandler#onLivingAttack}）。
@@ -215,12 +228,13 @@ public final class InteropProjectileHandler {
 
             clone.moveTo(spawn.x, spawn.y, spawn.z, arrow.getYRot(), arrow.getXRot());
             clone.setOwner(player);
+            clone.pickup = AbstractArrow.Pickup.CREATIVE_ONLY;
             clone.setBaseDamage(arrow.getBaseDamage());
             clone.setKnockback(arrow.getKnockback());
             clone.setPierceLevel(arrow.getPierceLevel());
             clone.setCritArrow(arrow.isCritArrow());
             if (arrow.isOnFire()) {
-                clone.setSecondsOnFire(arrow.getRemainingFireTicks());
+                clone.setRemainingFireTicks(arrow.getRemainingFireTicks());
             }
 
             // 先复制标记（含源武器快照与齐射标记），再补上"克隆体"自己的标记

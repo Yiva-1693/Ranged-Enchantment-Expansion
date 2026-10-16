@@ -2,6 +2,7 @@ package com.yiva.homingarrows.weightless;
 
 import com.yiva.homingarrows.HomingArrowsMod;
 import com.yiva.homingarrows.config.ModConfig;
+import com.yiva.homingarrows.projectile.AbstractArrowAccess;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.ThrownTrident;
 import net.minecraft.world.phys.Vec3;
@@ -152,6 +153,12 @@ public final class WeightlessProjectileManager {
             if (projectile == null || !projectile.isAlive() || projectile.isRemoved()
                     || projectile.level().isClientSide()) {
                 toRemove.add(key);
+                continue;
+            }
+
+            // 落地当刻就交还原版，避免在位置停滞检测生效前触发空中寿命清理。
+            if (projectile instanceof AbstractArrowAccess access && access.homingarrows$isInGround()) {
+                stopWeightless(key, tracked, "已插入方块/落地");
                 continue;
             }
 
